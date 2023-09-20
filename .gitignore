@@ -1,0 +1,13 @@
+node_modules
+./src/CrossSectionTools.js
+./src/DaskCrossSectionTools.py
+data
+temp
+*.py
+*.zip
+*.ipynb
+package.json
+package-lock.json
+.vscode
+developing
+.pytest_cache
