@@ -3,9 +3,7 @@ node_modules
 ./src/DaskCrossSectionTools.py
 data
 temp
-*.py
 *.zip
-*.ipynb
 package.json
 package-lock.json
 .vscode
