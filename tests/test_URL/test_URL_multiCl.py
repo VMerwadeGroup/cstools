@@ -8,7 +8,8 @@ output_dir = f'{root_dir}/output/multiCl'
 rr = RiverReach(
 	centerline_file = 'https://rimorphis.org/platform/api/postgrest/rpc/get_flowlines_in_bb?lngw=-93.0703916041091&lats=44.94795430845617&lnge=-93.07239160410911&latn=44.94595430845617',
 	observation_file = 'https://ehydrotest.blob.core.usgovcloudapi.net/ehydro-surveys/CEMVP/UM_SP_P02_20211006_CS_8380_8388.ZIP',
-	survey_type = 'zigzag'
+	survey_type = 'zigzag',
+    input_driver = 'eHydro_url'
 )
 
 cst = CrossSectionTools(rr)

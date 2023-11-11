@@ -10,7 +10,7 @@ rr = RiverReach(
     centerline_file = f'{input_dir}/centerline.shp',
     boundary_file = f'{input_dir}/boundary.shp',
     cross_section_file = f'{input_dir}/projected_XS.shp',
-    survey_type = 'line'
+    survey_type = 'linear'
 )
 
 cst = CrossSectionTools(rr)

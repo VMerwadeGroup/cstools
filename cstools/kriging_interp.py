@@ -6,8 +6,6 @@ import geopandas as gpd
 from shapely.geometry import Polygon
 from skgstat import DirectionalVariogram, Variogram
 from skgstat import OrdinaryKriging
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 from .preprocess import CoordConverter
 from .reach import *

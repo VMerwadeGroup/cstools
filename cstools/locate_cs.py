@@ -143,7 +143,7 @@ def project_points_cs(reach: RiverReach,
     masks = cs_gdf.buffer(np.array(list(bws)))
     cs_gdf['clip_obs'] = [ob_gdf[ob_gdf.geometry.within(mask)]['geometry'] for mask in masks.geometry]
 
-    if reach.survey_type == 'line':
+    if reach.survey_type == 'linear':
         cs_gdf = cs_gdf.apply(project_linear_survey, axis=1)
     elif reach.survey_type == 'zigzag':
         num = num if num else reach.vertices_in_xs

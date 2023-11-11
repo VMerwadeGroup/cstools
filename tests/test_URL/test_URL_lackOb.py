@@ -8,7 +8,8 @@ output_dir = f'{root_dir}/output/lackOb'
 rr = RiverReach(
     centerline_file = 'https://rimorphis.org/platform/api/postgrest/river_flowline?and=(foreign_id.eq.22000600044323)&select=geometry',
     observation_file = 'https://ehydrotest.blob.core.usgovcloudapi.net/ehydro-surveys/CEMVP/UM_SP_SAF_20150316_CS_8554_8558.ZIP',
-    survey_type = 'zigzag'
+    survey_type = 'zigzag',
+    input_driver = 'eHydro_url'
 )
 
 cst = CrossSectionTools(rr)

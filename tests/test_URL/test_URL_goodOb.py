@@ -9,7 +9,8 @@ output_dir = f'{root_dir}/output/goodOb'
 rr = RiverReach(
     centerline_file = 'https://rimorphis.org/platform/api/postgrest/river_flowline?and=(foreign_id.eq.22000600016702)&select=geometry',
     observation_file = 'https://ehydrotest.blob.core.usgovcloudapi.net/ehydro-surveys/CEMVP/UM_SP_P02_20190723_CS_8354_8364.ZIP',
-    survey_type = 'zigzag'
+    survey_type = 'zigzag',
+    input_driver = 'eHydro_url'
 )
 
 cst = CrossSectionTools(rr)

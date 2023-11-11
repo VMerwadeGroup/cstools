@@ -8,9 +8,11 @@ def smooth_line_geom(line_geom: LineString, spacing: float|None = 10) -> LineStr
     num = int(line_geom.length / spacing) + 1
     xy = np.array(line_geom.coords)
     xy = xy[:, :2]
-    tck, u = interpolate.splprep(xy.T, u=None, k=3, s=0) 
+    ## Note: splprep and splrep use different way to get the default s 
+    tck, u = interpolate.splprep(xy.T, u=None, k=3, s=num) 
     u_new = np.linspace(u.min(), u.max(), num)
     new_x, new_y = interpolate.splev(u_new, tck)
     return LineString(zip(new_x, new_y))
+
 
     

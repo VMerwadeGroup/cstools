@@ -18,6 +18,8 @@ import warnings
 import pyproj
 from . import preprocess
 from . import file_mangement
+import requests
+from requests.exceptions import ConnectionError
 
 gpd.options.use_pygeos = False
 
@@ -45,13 +47,15 @@ class RiverReach(object):
         ## default values for input parameters
         centerline_file = cross_section_file = boundary_file = observation_file = \
         mesh_file = survey_type = map_crsid = elev_base = None
-        output_dir = './temp'
+        download_dir = './temp'
         HD_ob = False
         shift = True
         smooth_cl = True
+        clip_by_boundary = False
         unit_conversion_factor = 1 # length of unit : meter
         survey_type = 'zigzag' # default is zigzag (irregular shapes)
         cl_spacing = 10
+        input_driver = None
         
         if 'centerline_file' in kwargs               :   centerline_file = kwargs.pop('centerline_file')
         if 'cross_section_file' in kwargs            :   cross_section_file = kwargs.pop('cross_section_file')
@@ -60,16 +64,18 @@ class RiverReach(object):
         if 'mesh_file' in kwargs                     :   mesh_file = kwargs.pop('mesh_file')
         if 'survey_type' in kwargs                   :   survey_type = kwargs.pop('survey_type')
         if 'map_crsid' in kwargs                     :   map_crsid = kwargs.pop('map_crsid')
-        if 'output_dir' in kwargs                    :   output_dir = kwargs.pop('output_dir')
+        if 'download_dir' in kwargs                  :   download_dir = kwargs.pop('download_dir')
         if 'HD_ob' in kwargs                         :   HD_ob = kwargs.pop('HD_ob')
         if 'elev_base' in kwargs                     :   elev_base = kwargs.pop('elev_base')
         if 'shift' in kwargs                         :   shift = kwargs.pop('shift')
         if 'smooth_cl' in kwargs                     :   smooth_cl = kwargs.pop('smooth_cl')
         if 'unit_conversion_factor' in kwargs        :   unit_conversion_factor = kwargs.pop('unit_conversion_factor')
         if 'cl_spacing' in kwargs                    :   cl_spacing = kwargs.pop('cl_spacing')
+        if 'input_driver' in kwargs                  :   input_driver = kwargs.pop('input_driver')
+        if 'clip_by_boundary' in kwargs              :   clip_by_boundary = kwargs.pop('clip_by_boundary')
       
         if (len(kwargs) != 0): raise ValueError('Please provide recognizable keyword arguments!')
-        if (survey_type not in ['line', 'zigzag']): raise ValueError('Please assign the survey_type as "line" or "zigzag"!')
+        if (survey_type not in ['linear', 'zigzag']): raise ValueError('Please assign the survey_type as "linear" or "zigzag"!')
         
         ## update settings based on the input parameters
         self.HD_ob = HD_ob
@@ -83,33 +89,50 @@ class RiverReach(object):
         self.survey_type = survey_type
         self.cl_gdf = self.cs_gdf = self.ob_gdf = self.bd_gdf = self.ms_gdf = None
 
-        boundary_driver = None
+        ## getting files from different methods
+        ## 1. eHydro_url
+        ## 2. eHydro_folder
+        ## 3. .gdb
+        ## 4. file path
         if (observation_file):
             self.ob_gdf, self.lowest_elev = file_mangement.init_observation(
                                                 path = observation_file,
-                                                output_dir = output_dir,
-                                                driver = None,
+                                                download_dir = download_dir,
+                                                driver = input_driver,
                                                 use_HD = HD_ob,
                                                 elev_base = elev_base,
                                                 shift = shift
                                             )
             
-            if (observation_file.startswith("https:") or observation_file.startswith("http:")):
-                dir_name = os.path.basename(observation_file).replace(".ZIP", "")
-                boundary_file = f"./{output_dir}/{dir_name}/{dir_name}.gdb"
-                boundary_driver = "FileGDB"
-                        
-        if (boundary_file): 
-            self.bd_gdf = file_mangement.init_boundary(
-                    path = boundary_file,
-                    output_dir = output_dir,
-                    driver = boundary_driver
-            )
+            if (input_driver is not None):
+                if ('eHydro' in input_driver):
+                    driver = "FileGDB"
+                    layer = "SurveyJob"
+                    if (input_driver == 'eHydro_url'):
+                        site_ID = os.path.basename(observation_file).replace(".ZIP", "")
+                        boundary_file = os.path.join(download_dir, site_ID, f"{site_ID}.gdb")
+                    elif (input_driver == 'eHydro_dir'):
+                        site_ID = os.path.basename(observation_file)
+                        boundary_file = os.path.join(observation_file, f"{site_ID}.gdb")
+                    else:
+                        raise ValueError("Invalid value of 'input_driver'.")
+                    self.bd_gdf = file_mangement.init_boundary(path = boundary_file, driver = driver, layer = layer)
+        
+        if (boundary_file) and (self.bd_gdf is None): 
+            self.bd_gdf = file_mangement.init_boundary(path = boundary_file)
 
         self.bd_geom = self.bd_gdf.geometry.iloc[0] if isinstance(self.bd_gdf, gpd.GeoDataFrame) else None
         self.user_crs = pyproj.CRS(map_crsid) if map_crsid else self.bd_gdf.crs
         self.proj_crs = self.user_crs
         self.checkCRS()
+
+        ## only process data in the boundary
+        if (clip_by_boundary):
+            if (self.ob_gdf is not None) and (self.bd_geom is not None):
+                self.ob_gdf = self.ob_gdf[self.ob_gdf.within(self.bd_geom)]
+                self.ob_gdf = self.ob_gdf.reset_index(drop=True)
+            else:
+                raise ValueError("The observation or boundary files are not initialized correctly!")
 
         if (cross_section_file):
             self.cs_gdf = file_mangement.init_cross_sections(path=cross_section_file)

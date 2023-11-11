@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from shapely.geometry import Point, Polygon, LineString
 from shapely import ops

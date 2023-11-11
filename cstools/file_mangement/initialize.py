@@ -43,23 +43,18 @@ def init_centerline(path: str, bd_file: str|None = None) -> gpd.GeoDataFrame:
     return gdf
 
 def init_boundary(path: str, 
-                  output_dir: str = "./temp",
-                  driver: str|None = None
+                  driver: str|None = None,
+                  layer: str|None = None,
                   ) -> gpd.GeoDataFrame:
     if (driver is None):
         if (os.path.exists(path)):
             gdf = gpd.read_file(path)
         else:
-            try:
-                gdf = load_file_from_ehydro_url(url=path, root_dir=output_dir) 
-            except:
-                raise ValueError("Invalid path.")        
+            raise ValueError("Invalid path.")        
     elif (driver == "FileGDB"):
         ## default the .gdb file is from eHydro
         ## TODO: it should be updated for general input source
-        gdf = gpd.read_file(path, driver="FileGDB", layer="SurveyJob")
-    elif (driver == "eHydro"):
-        gdf = load_file_from_ehydro_url(url=path, root_dir=output_dir) 
+        gdf = gpd.read_file(path, driver=driver, layer=layer)
     else:
         raise ValueError("Invalid driver.")
     
@@ -78,7 +73,7 @@ def init_cross_sections(path: str) -> gpd.GeoDataFrame:
 
 def init_observation(
         path: str,
-        output_dir: str = './temp',
+        download_dir: str = './temp',
         driver: str|None = None,
         use_HD: bool = True,
         elev_base: float|bool|None = False,
@@ -107,13 +102,22 @@ def init_observation(
                 lowest_elev = shift_elev_by_lowest(gdf=gdf)
         else:
             try:
-                workdir = load_file_from_ehydro_url(url=path, root_dir=output_dir) 
+                workdir = load_file_from_ehydro_url(url=path, root_dir=download_dir) 
                 gdf, lowest_elev = process_xyz_in_workdir(workdir=workdir, use_HD=use_HD, elev_base=True, shift=shift)
             except:
                 raise ValueError("Invalid path.")        
-    elif (driver == "eHydro"):
-        workdir = load_file_from_ehydro_url(url=path, root_dir=output_dir)
+    elif (driver == "eHydro_url"):
+        try:
+            requests.get(path)
+        except ConnectionError:
+            print("Invalid url!")
+        workdir = load_file_from_ehydro_url(url=path, root_dir=download_dir)
         gdf, lowest_elev = process_xyz_in_workdir(workdir=workdir, use_HD=use_HD, elev_base=True, shift=shift)
+    elif (driver == 'eHydro_dir'):
+        ## TODO: check if the directory has the necesary data
+        if (not os.path.isdir(path)):
+            raise ValueError("Invalid directory path of the eHydro dataset!")
+        gdf, lowest_elev = process_xyz_in_workdir(workdir=path, use_HD=use_HD, elev_base=True, shift=shift)
     else:
         raise ValueError("Invalid driver.")
         

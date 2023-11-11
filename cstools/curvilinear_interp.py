@@ -1,8 +1,32 @@
+from __future__ import annotations
+
 from .reach import *
 from .file_mangement.export import export_geofile
 from shapely import speedups
 
 speedups.enable()
+
+def _line_spanning_bd(p1: Point, p2: Point, bd: Polygon, cl=LineString) -> LineString | None:
+    p1_a = np.array(p1.xy)
+    p2_a = np.array(p2.xy)
+    t1, t2 = -2, 3
+    v = p2_a - p1_a
+    ext_p1 = p1_a + v*t1
+    ext_p2 = p1_a + v*t2
+    line_ext = LineString([ext_p1, ext_p2])
+    
+    spanning_lines = line_ext.intersection(bd)
+    if (spanning_lines.geom_type == "LineString"):
+        return spanning_lines
+    elif (spanning_lines.geom_type == "MultiLineString"):
+        p1_buffer = p1.buffer(3)
+        for sp_line in spanning_lines.geoms:
+            if (p1_buffer.intersects(sp_line)):
+                return sp_line
+            elif (sp_line.intersects(cl)):
+                return sp_line
+    return None
+    
 
 def process_csdf_for_mesh(reach: RiverReach,
                           xs_df: pd.DataFrame,
@@ -35,15 +59,12 @@ def process_csdf_for_mesh(reach: RiverReach,
     print('Generating points on given corss-sections...')
     vertices_dfs =[]
     for i, s, start_N, end_N in zip(indice, locations, starts, ends):
-        extend_coef = 10 if reach.bd_gdf is not None else 1
-        start_point = reach.coord_converter.sn2xy_point(s=s, n=start_N*extend_coef)
-        end_point = reach.coord_converter.sn2xy_point(s=s, n=end_N*extend_coef)
-        line = LineString([start_point, end_point])
-
         if reach.bd_geom:
             # find the N of intersections between cross-sections and the boundary
-            intersections = line.intersection(reach.bd_geom)
-            bd_SN = [reach.coord_converter.xy2sn_coord(*c) for c in intersections.coords]
+            p1 = reach.coord_converter.sn2xy_point(s=s, n=start_N)
+            p2 = reach.coord_converter.sn2xy_point(s=s, n=end_N)
+            sp_line = _line_spanning_bd(p1, p2, reach.bd_geom, reach.cl_geom)
+            bd_SN = [reach.coord_converter.xy2sn_coord(*c) for c in sp_line.coords]
             bd_N = sorted([SN[1] for SN in bd_SN])
         else:
             bd_N = sorted([start_N, end_N])
@@ -245,7 +266,7 @@ def generate_mesh(reach: RiverReach,
     print('Interpolating cross-sections...')
     for idx in locations.index[1:]:
     # for idx in tqdm(locations.index[1:], desc='Interpolating cross-sections...'):
-        b = max(width[idx-1], width[idx])*2
+        b = np.mean([width[idx-1], width[idx]])
         up_s, down_s = locations[idx-1], locations[idx]
         num = int(nums[idx])
 
@@ -263,13 +284,17 @@ def generate_mesh(reach: RiverReach,
             new_s = np.linspace(up_s+space_max, up_s+space_max*num, max(num,0))
 
         for i, s in enumerate(new_s):
-            start = reach.coord_converter.sn2xy_point(s=s, n=-b)
-            end = reach.coord_converter.sn2xy_point(s=s, n=b)
-            line = LineString([start, end])
+            p1 = reach.coord_converter.sn2xy_point(s=s, n=-b)
+            p2 = reach.coord_converter.sn2xy_point(s=s, n=b)
 
-            start, end = line.intersection(reach.bd_geom).coords
-            start_SN = reach.coord_converter.xy2sn_coord(*start)
-            end_SN = reach.coord_converter.xy2sn_coord(*end)
+            spanning_line = _line_spanning_bd(p1, p2, reach.bd_geom, reach.cl_geom)
+            # if (spanning_line == None):
+            #     temp_gdf = gpd.GeoDataFrame(geometry=[p1, p2], index=[0, 1], crs=reach.proj_crs)
+            #     temp_gdf.to_file('./output/failed_points.geojson')
+            #     continue
+            start_p, end_p = spanning_line.coords
+            start_SN = reach.coord_converter.xy2sn_coord(*start_p)
+            end_SN = reach.coord_converter.xy2sn_coord(*end_p)
 
             bd_n = sorted([start_SN[1], end_SN[1]])
             n_arr = np.interp(proportion, [0, 1], bd_n)
@@ -300,7 +325,7 @@ def generate_mesh(reach: RiverReach,
                 ob_gdf.sort_values(by=['S', 'N'], inplace=True)
                 ob_gdf.reset_index(drop=True, inplace=True)
 
-                mask = line.buffer(reach.bw_org)
+                mask = spanning_line.buffer(reach.bw_org)
                 selected = ob_gdf[ob_gdf.geometry.within(mask)]
                 selected.dropna(inplace=True)
 

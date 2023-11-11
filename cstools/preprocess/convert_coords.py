@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 from shapely.geometry import Point, LineString
 import geopandas as gpd
