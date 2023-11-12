@@ -1,6 +1,7 @@
 node_modules
 ./src/CrossSectionTools.js
 ./src/DaskCrossSectionTools.py
+./tests/*/output
 data
 temp
 *.zip

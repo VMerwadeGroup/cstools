@@ -65,10 +65,11 @@ print('Starting tests...')
 for f in test_folders:
     folder_name = os.path.basename(f)
     func_name = folder_name.replace('test_', '')
-    if ('Raster' in func_name):
+    if ('RiverReach' in func_name):
         continue
     if (func_name == 'URL'):
         URLTests(f, func_name)
     else:
         commonTests(f, func_name)
 
+rrtest = pytest.main(['./tests/test_RiverReach/test_RiverReach.py'])

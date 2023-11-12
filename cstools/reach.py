@@ -155,7 +155,7 @@ class RiverReach(object):
         if (isinstance(self.cl_gdf, gpd.GeoDataFrame) and isinstance(self.bd_gdf, gpd.GeoDataFrame)):
             self.approx_width = preprocess.get_approx_channel_width(bd_geom=self.bd_geom)
             self.interp_xs_space = self.approx_width / 5
-            self.vertices_in_xs = int(self.approx_width / self.bw_org)
+            self.vertices_in_xs = max(int(self.approx_width / self.bw_org), 21)
         if isinstance(self.cl_gdf, gpd.GeoDataFrame):
             ## ---------- centerline proporties for SN coordinates transform ----------
             self.coord_converter = preprocess.CoordConverter(self.cl_geom)

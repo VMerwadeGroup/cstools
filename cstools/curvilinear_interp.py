@@ -3,29 +3,39 @@ from __future__ import annotations
 from .reach import *
 from .file_mangement.export import export_geofile
 from shapely import speedups
+from shapely.ops import nearest_points
 
 speedups.enable()
 
-def _line_spanning_bd(p1: Point, p2: Point, bd: Polygon, cl=LineString) -> LineString | None:
+def _line_spanning_bd(p1: Point, p2: Point, reach: RiverReach) -> LineString:
+    p_on_cl = nearest_points(p1, reach.cl_geom)[1]
+    p_on_cl_a = np.array(p_on_cl.xy)
     p1_a = np.array(p1.xy)
     p2_a = np.array(p2.xy)
-    t1, t2 = -2, 3
-    v = p2_a - p1_a
-    ext_p1 = p1_a + v*t1
-    ext_p2 = p1_a + v*t2
-    line_ext = LineString([ext_p1, ext_p2])
     
-    spanning_lines = line_ext.intersection(bd)
-    if (spanning_lines.geom_type == "LineString"):
-        return spanning_lines
-    elif (spanning_lines.geom_type == "MultiLineString"):
-        p1_buffer = p1.buffer(3)
-        for sp_line in spanning_lines.geoms:
-            if (p1_buffer.intersects(sp_line)):
-                return sp_line
-            elif (sp_line.intersects(cl)):
-                return sp_line
-    return None
+    v = (p2_a - p1_a)
+    v /= np.linalg.norm(v, ord=2)
+    
+    left_ext = LineString([p_on_cl_a, p_on_cl_a + 5*reach.approx_width*v])
+    right_ext= LineString([p_on_cl_a, p_on_cl_a - 5*reach.approx_width*v])
+
+    left_inters = left_ext.intersection(reach.bd_geom.boundary)
+    left_end = nearest_points(left_inters, p_on_cl)[0]
+
+    right_inters = right_ext.intersection(reach.bd_geom.boundary)
+    right_end = nearest_points(right_inters, p_on_cl)[0]
+    return LineString([left_end, right_end])        
+    # spanning_lines = line_ext.intersection(bd)    
+    # if (spanning_lines.geom_type == "LineString"):
+    #     return spanning_lines
+    # elif (spanning_lines.geom_type == "MultiLineString"):
+    #     # p1_buffer = p1.buffer(3)
+    #     for sp_line in spanning_lines.geoms:
+    #         ## TODO: this is a heuristic method, some edge cases should be considered
+    #         # if (p1_buffer.intersects(sp_line) or sp_line.intersects(cl)):
+    #         if (sp_line.intersects(cl)):
+    #             return sp_line
+    # return None
     
 
 def process_csdf_for_mesh(reach: RiverReach,
@@ -59,19 +69,22 @@ def process_csdf_for_mesh(reach: RiverReach,
     print('Generating points on given corss-sections...')
     vertices_dfs =[]
     for i, s, start_N, end_N in zip(indice, locations, starts, ends):
+        filt = xs_df[xs_df['XS_id'] == i]
+        filt = filt.sort_values(by=['N'])
+        filt.reset_index(drop=True, inplace=True)
+
         if reach.bd_geom:
             # find the N of intersections between cross-sections and the boundary
-            p1 = reach.coord_converter.sn2xy_point(s=s, n=start_N)
-            p2 = reach.coord_converter.sn2xy_point(s=s, n=end_N)
-            sp_line = _line_spanning_bd(p1, p2, reach.bd_geom, reach.cl_geom)
+            p1 = Point(filt.loc[0, ['x','y']].values)
+            p2 = Point(filt.loc[len(filt)-1, ['x','y']].values)
+            sp_line = _line_spanning_bd(p1, p2, reach)
             bd_SN = [reach.coord_converter.xy2sn_coord(*c) for c in sp_line.coords]
             bd_N = sorted([SN[1] for SN in bd_SN])
         else:
             bd_N = sorted([start_N, end_N])
 
-        filt = xs_df[xs_df['XS_id'] == i]
-        filt.reset_index(drop=True, inplace=True)
-
+        if (bd_N[0]*bd_N[1] > 0):
+            print(i, bd_N, filt)
     
         vertices_N = np.linspace(*bd_N, num_vertices)
         f = interpolate.interp1d(filt['N'], filt['z'], kind='linear', bounds_error=False, fill_value=np.nan)
@@ -103,8 +116,7 @@ def process_csdf_for_mesh(reach: RiverReach,
         vertices_df['z'] = vertices_df['z'].fillna(method='ffill')
         vertices_dfs.append(vertices_df)
 
-    given_vertices = pd.concat(vertices_dfs)
-    return given_vertices
+    return pd.concat(vertices_dfs)
 
 def fix_mesh_intersection(reach: RiverReach, mesh_points: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     g = mesh_points.groupby(['XS_id'])
@@ -175,9 +187,8 @@ def fix_mesh_intersection(reach: RiverReach, mesh_points: gpd.GeoDataFrame) -> t
             xs_df.loc[idx, 'geometry'] = new_line
 
             ## modify the mesh points
-            # snz = [self.xy2sn_coord(p) for p in xyz]
-            sn = preprocess.convert_xy2sn(np.array([x, y]).T, reach.cl_xyz, reach.bw_org)
-            # s, n, _ = zip(*snz)
+            snz = [reach.coord_converter.xy2sn_coord(xi, yi) for xi, yi in zip(x,y)]
+            s, n, _ = zip(*snz)
             xs_id = xs_df.loc[idx, 'XS_id']
             filter_idx = mesh_points[mesh_points['XS_id'] == xs_id].index
 
@@ -187,8 +198,8 @@ def fix_mesh_intersection(reach: RiverReach, mesh_points: gpd.GeoDataFrame) -> t
                 'x': x,
                 'y': y,
                 'z': z,
-                'S': sn[:, 0],
-                'N': sn[:, 1]
+                'S': s,
+                'N': n
             }
 
             df = pd.DataFrame(dic, index=filter_idx)
@@ -247,13 +258,10 @@ def generate_mesh(reach: RiverReach,
         else:
             num_vertices = reach.vertices_in_xs
 
-    dfInverseSN = lambda x: Point(*reach.coord_converter.sn2xy_coord(*x))
+    dfInverseSN = lambda x: reach.coord_converter.sn2xy_point(*x)
     
     proportion = np.linspace(0, 1, num_vertices)
     group = xs_df.groupby('XS_id')
-    starts = group['N'].min()
-    ends = group['N'].max()
-    width = ends - starts
     locations = group['S'].mean()
     s_diff = locations.diff()
 
@@ -266,7 +274,6 @@ def generate_mesh(reach: RiverReach,
     print('Interpolating cross-sections...')
     for idx in locations.index[1:]:
     # for idx in tqdm(locations.index[1:], desc='Interpolating cross-sections...'):
-        b = np.mean([width[idx-1], width[idx]])
         up_s, down_s = locations[idx-1], locations[idx]
         num = int(nums[idx])
 
@@ -284,37 +291,35 @@ def generate_mesh(reach: RiverReach,
             new_s = np.linspace(up_s+space_max, up_s+space_max*num, max(num,0))
 
         for i, s in enumerate(new_s):
-            p1 = reach.coord_converter.sn2xy_point(s=s, n=-b)
-            p2 = reach.coord_converter.sn2xy_point(s=s, n=b)
+            upstream = given_vertices[given_vertices['XS_id'] == idx-1]
+            downstream = given_vertices[given_vertices['XS_id'] == idx]
+            vertices = upstream.join(downstream, on='vertex_id', how='right',\
+                lsuffix='_up', rsuffix='_down')
+                
+            ## z: linear interpolation between upstream and downstream cross-sections
+            dist_up = np.abs(s - vertices['S_up'].unique()[0])
+            dist_down = np.abs(s - vertices['S_down'].unique()[0])
+            weight_up = dist_down / (dist_up + dist_down)
+            weight_down = dist_up / (dist_up + dist_down)
+            vertices['z'] = vertices['z_up'] * weight_up + vertices['z_down'] * weight_down
 
-            spanning_line = _line_spanning_bd(p1, p2, reach.bd_geom, reach.cl_geom)
-            # if (spanning_line == None):
-            #     temp_gdf = gpd.GeoDataFrame(geometry=[p1, p2], index=[0, 1], crs=reach.proj_crs)
-            #     temp_gdf.to_file('./output/failed_points.geojson')
-            #     continue
+            ## s: given
+            vertices['S'] = s
+
+            ## n: spanning line
+            p1 = reach.coord_converter.sn2xy_point(s=s, n=-1)
+            p2 = reach.coord_converter.sn2xy_point(s=s, n=1)
+
+            spanning_line = _line_spanning_bd(p1, p2, reach)
             start_p, end_p = spanning_line.coords
             start_SN = reach.coord_converter.xy2sn_coord(*start_p)
             end_SN = reach.coord_converter.xy2sn_coord(*end_p)
 
             bd_n = sorted([start_SN[1], end_SN[1]])
             n_arr = np.interp(proportion, [0, 1], bd_n)
-
-            upstream = given_vertices[given_vertices['XS_id'] == idx-1]
-            downstream = given_vertices[given_vertices['XS_id'] == idx]
-            vertices = upstream.join(downstream, on='vertex_id', how='right',\
-                lsuffix='_up', rsuffix='_down')
-                
-            ## linear interpolation between upstream and downstream cross-sections
-            vertices['S'] = s
-            # vertices['z'] = vertices.apply(interpPivots, axis=1)
-
-            dist_up = np.abs(s - vertices['S_up'].unique()[0])
-            dist_down = np.abs(s - vertices['S_down'].unique()[0])
-            weight_up = dist_down / (dist_up + dist_down)
-            weight_down = dist_up / (dist_up + dist_down)
-            vertices['z'] = vertices['z_up'] * weight_up + vertices['z_down'] * weight_down
             vertices['N'] = n_arr
 
+            ## setup a dataframe
             interp_df = vertices.loc[:, ['S', 'N', 'z', 'vertex_id']]
             interp_df['geometry'] = interp_df[['S', 'N', 'z']].apply(dfInverseSN, axis=1)
             interp_df['XS_id'] = f'{idx-1}_{i}'

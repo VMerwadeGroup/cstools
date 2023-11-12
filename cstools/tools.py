@@ -86,7 +86,7 @@ class CrossSectionTools(object):
 
     def PointToXS(self,
                   bins: int|None = None, 
-                  num_vertices: float|None = None, 
+                  num_vertices: int|None = None, 
                   positions: list[float]|None = None, 
                   bw: list[float]|float|None = None, 
                   dist_threshold: float = 2.0, 
@@ -102,7 +102,7 @@ class CrossSectionTools(object):
         ----------
         bins : int | None, optional
             The number of bins for the signal function to find out the locations of cross-sections, by default None
-        num_vertices : float | None, optional
+        num_vertices : int | None, optional
             The number of vertices in each cross-section, by default None
         positions : list[float] | None, optional
             Given the positions of cross-sections by S-coordinates, by default None
@@ -147,7 +147,7 @@ class CrossSectionTools(object):
         return xs_df
 
     def PointToMesh(self,
-                    num_vertices: float|None = None,
+                    num_vertices: int|None = None,
                     space_min: float|None = None,
                     space_max: float|None = None, 
                     with_original: bool = False, 
@@ -284,7 +284,7 @@ class CrossSectionTools(object):
             The S coordinates of cross-section locations, by default None
         space : float, optional
             A spacing to create cross-sections uniformly, by default None
-        num_vertices : float, optional
+        num_vertices : int, optional
             The number of vertices in each cross-section, by default None
         interp : str, optional
             The method to do interpolation based on the mesh, by default 'linear'
