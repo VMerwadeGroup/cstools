@@ -183,12 +183,12 @@ def process_xyz_in_workdir(
     ## use HD survey points, or preprocessed survey points
     if (use_HD):
         if (os.path.exists(xyz_A_file)):
-            df = pd.read_csv(xyz_A_file, sep=" ", header=None, names=['x', 'y', 'z'])
+            df = pd.read_csv(xyz_A_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
         else:
             print('''Warning: Cannot find HD observations. Use preprocessed observation instead!''')
-            df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'])
+            df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
     else:
-        df = pd.read_csv(xyz_A_file, sep=" ", header=None, names=['x', 'y', 'z'])
+        df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
 
     ## if values represents depths, is downward a positive or negative direction
     if (elev_base):
