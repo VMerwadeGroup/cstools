@@ -8,34 +8,43 @@ from shapely.ops import nearest_points
 speedups.enable()
 
 def _line_spanning_bd(p1: Point, p2: Point, reach: RiverReach) -> LineString:
+    """Find a line including p1 and p2 spans the boundary
+
+    Parameters
+    ----------
+    p1 : Point
+        A point close to the left bank.
+    p2 : Point
+        A point close to the right bank.
+    reach : RiverReach
+        RiverReach object provides the centerline geometry, boundary geometry, and the approximated channel width.
+
+    Returns
+    -------
+    LineString
+        A Line spans the boundary.
+    """
     p_on_cl = nearest_points(p1, reach.cl_geom)[1]
     p_on_cl_a = np.array(p_on_cl.xy)
     p1_a = np.array(p1.xy)
     p2_a = np.array(p2.xy)
     
+    ## p1 and p2 is used to provide the unit norm vector
     v = (p2_a - p1_a)
     v /= np.linalg.norm(v, ord=2)
-    
+
+    ## make rays start from the point on the centerline and point to left/right normal direction
+    ## the length of the rays are set as 5 times reach.approx_width
     left_ext = LineString([p_on_cl_a, p_on_cl_a + 5*reach.approx_width*v])
     right_ext= LineString([p_on_cl_a, p_on_cl_a - 5*reach.approx_width*v])
 
+    ## the end points are nearests points from the intersections of the boundary to the point on the centerline.
     left_inters = left_ext.intersection(reach.bd_geom.boundary)
     left_end = nearest_points(left_inters, p_on_cl)[0]
 
     right_inters = right_ext.intersection(reach.bd_geom.boundary)
     right_end = nearest_points(right_inters, p_on_cl)[0]
     return LineString([left_end, right_end])        
-    # spanning_lines = line_ext.intersection(bd)    
-    # if (spanning_lines.geom_type == "LineString"):
-    #     return spanning_lines
-    # elif (spanning_lines.geom_type == "MultiLineString"):
-    #     # p1_buffer = p1.buffer(3)
-    #     for sp_line in spanning_lines.geoms:
-    #         ## TODO: this is a heuristic method, some edge cases should be considered
-    #         # if (p1_buffer.intersects(sp_line) or sp_line.intersects(cl)):
-    #         if (sp_line.intersects(cl)):
-    #             return sp_line
-    # return None
     
 
 def process_csdf_for_mesh(reach: RiverReach,

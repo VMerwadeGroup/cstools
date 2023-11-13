@@ -43,6 +43,8 @@ def get_cl_from_multilines(
         rootDir: str | None = None
     ) -> gpd.GeoDataFrame:
 
+    ## TODO: this funciton may be problematic, it needs to be review
+
     ## preprocessing and clip line features by boundary
     cl_gdf = cl_gdf.to_crs(bd_gdf.crs)
     bd_geom = bd_gdf.loc[0, 'geometry']
@@ -99,4 +101,3 @@ def get_cl_from_multilines(
     cl_gdf = gpd.GeoDataFrame({'geometry': [cl2D]}, index=[0], crs=bd_gdf.crs)
     return cl_gdf
     
-

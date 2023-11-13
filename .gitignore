@@ -10,3 +10,4 @@ package-lock.json
 .vscode
 developing
 .pytest_cache
+*/__pycache__

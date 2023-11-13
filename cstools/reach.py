@@ -54,7 +54,7 @@ class RiverReach(object):
         clip_by_boundary = False
         unit_conversion_factor = 1 # length of unit : meter
         survey_type = 'zigzag' # default is zigzag (irregular shapes)
-        cl_spacing = 10
+        cl_spacing = 1
         input_driver = None
         
         if 'centerline_file' in kwargs               :   centerline_file = kwargs.pop('centerline_file')
@@ -92,8 +92,9 @@ class RiverReach(object):
         ## getting files from different methods
         ## 1. eHydro_url
         ## 2. eHydro_folder
-        ## 3. .gdb
+        ## 3. .gdb, TODO: get the layer name from input   
         ## 4. file path
+
         if (observation_file):
             self.ob_gdf, self.lowest_elev = file_mangement.init_observation(
                                                 path = observation_file,
@@ -105,7 +106,7 @@ class RiverReach(object):
                                             )
             
             if (input_driver is not None):
-                if ('eHydro' in input_driver):
+                if ('eHydro' in input_driver) and (boundary_file is None):
                     driver = "FileGDB"
                     layer = "SurveyJob"
                     if (input_driver == 'eHydro_url'):
@@ -117,7 +118,8 @@ class RiverReach(object):
                     else:
                         raise ValueError("Invalid value of 'input_driver'.")
                     self.bd_gdf = file_mangement.init_boundary(path = boundary_file, driver = driver, layer = layer)
-        
+
+        ## TODO: check if boundary file should from .gdb or not        
         if (boundary_file) and (self.bd_gdf is None): 
             self.bd_gdf = file_mangement.init_boundary(path = boundary_file)
 
@@ -140,6 +142,9 @@ class RiverReach(object):
             self.ms_gdf = file_mangement.init_mesh(path=mesh_file)
         if (centerline_file):
             self.cl_gdf = file_mangement.init_centerline(path=centerline_file, bd_file=self.bd_gdf)
+        else:
+            cl_geom = preprocess.create_cl_from_bd(self.bd_geom)
+            self.cl_gdf = gpd.GeoDataFrame(geometry=[cl_geom], index=[0], crs=self.proj_crs)
         self.checkCRS()
         ## make sure the all CRS are the same and projected; then start processing geometries    
        
