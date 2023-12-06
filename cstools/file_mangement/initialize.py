@@ -130,6 +130,8 @@ def init_observation(
 make_point_by_xyz = lambda row: Point(*row)
 
 def find_elev_base_from_metadata_ehydro(workdir: str) -> float | None:
+    ## TODO: the first priority is check if we can find LOL in .xml file
+
     elev_base = None
     XYZH_file = glob(f'{workdir}/*.XYZH')
     XYZ_file = glob(f'{workdir}/*.XYZ')
@@ -176,33 +178,56 @@ def process_xyz_in_workdir(
         raise ValueError("Please provide valid elevation base.")
 
     survey_code = os.path.basename(workdir)
-    crs = fiona.open(f"{workdir}/{survey_code}.gdb").crs
+    gdb_file = f"{workdir}/{survey_code}.gdb"
     xyz_A_file = f'{workdir}/{survey_code}_A.XYZ'
     xyz_file = f'{workdir}/{survey_code}.XYZ'
+    # xyz_file = f'{workdir}/{survey_code}.dat'
+    crs = fiona.open(gdb_file).crs
 
     ## use HD survey points, or preprocessed survey points
-    if (use_HD):
-        if (os.path.exists(xyz_A_file)):
-            df = pd.read_csv(xyz_A_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
-        else:
-            print('''Warning: Cannot find HD observations. Use preprocessed observation instead!''')
-            df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
-    else:
-        df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
+    # if (use_HD):
+    #     if (os.path.exists(xyz_A_file)):
+    #         df = pd.read_csv(xyz_A_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
+    #     else:
+    #         print('''Warning: Cannot find HD observations. Use preprocessed observation instead!''')
+    #         try:
+    #             df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
+    #         except:
+    #             df = pd.read_csv(xyz_file.replace(".XYZ", ".dat"), sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
+    # else:
+    #     try:
+    #         df = pd.read_csv(xyz_file, sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
+    #     except:
+    #         df = pd.read_csv(xyz_file.replace(".XYZ", ".dat"), sep=" ", header=None, names=['x', 'y', 'z'], comment='#')
 
+    if (use_HD):
+        try:
+            gdf = gpd.read_file(gdb_file, driver="FileGDB", layer="SurveyPointHD")
+        except:
+            print('''Warning: Cannot find HD observations. Use preprocessed observation instead!''')
+            gdf = gpd.read_file(gdb_file, driver="FileGDB", layer="SurveyPoint")
+    else:
+        gdf = gpd.read_file(gdb_file, driver="FileGDB", layer="SurveyPoint")
+    
+    df = pd.DataFrame(gdf[['xLocation', 'yLocation', 'Z_use']])
+    df.columns = ['x', 'y', 'z']
+
+    
     ## if values represents depths, is downward a positive or negative direction
-    if (elev_base):
+    lowest_elev = None
+    if (isinstance(elev_base, float)):
         if (positive_depth):
             df['elev'] = elev_base - df['z']
         else:
             df['elev'] = elev_base + df['z']
+    
+        if (shift):
+            lowest_elev = df['elev'].min()
+            df['elev'] -= lowest_elev
 
-    lowest_elev = None
-    if (shift):
-        lowest_elev = df['elev'].min()
-        df['elev'] -= lowest_elev
-
-    df['geometry'] = df[['x', 'y', 'elev']].apply(make_point_by_xyz, axis=1)
+        df['geometry'] = df[['x', 'y', 'elev']].apply(make_point_by_xyz, axis=1)
+    else:
+        df['geometry'] = df[['x', 'y', 'z']].apply(make_point_by_xyz, axis=1)
     gdf = gpd.GeoDataFrame(df, geometry='geometry', crs=crs)
 
     return gdf, lowest_elev

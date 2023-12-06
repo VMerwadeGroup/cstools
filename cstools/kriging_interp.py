@@ -86,7 +86,7 @@ class AnisotropicKriging(object):
                            n_lags=25, 
                            model='spherical')
         
-        self.ok = OrdinaryKriging(self.v, min_points=5, max_points=15)
+        self.ok = OrdinaryKriging(self.v, min_points=5, max_points=15, solver='numpy')
 
         s_spacing_re = s_spacing * anisotropy_r
         s_re = np.arange(df['S_re'].min(), df['S_re'].max()+s_spacing_re, s_spacing_re)

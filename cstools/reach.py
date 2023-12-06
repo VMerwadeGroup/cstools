@@ -56,6 +56,7 @@ class RiverReach(object):
         survey_type = 'zigzag' # default is zigzag (irregular shapes)
         cl_spacing = 1
         input_driver = None
+        positive_depth = True
         
         if 'centerline_file' in kwargs               :   centerline_file = kwargs.pop('centerline_file')
         if 'cross_section_file' in kwargs            :   cross_section_file = kwargs.pop('cross_section_file')
@@ -73,6 +74,7 @@ class RiverReach(object):
         if 'cl_spacing' in kwargs                    :   cl_spacing = kwargs.pop('cl_spacing')
         if 'input_driver' in kwargs                  :   input_driver = kwargs.pop('input_driver')
         if 'clip_by_boundary' in kwargs              :   clip_by_boundary = kwargs.pop('clip_by_boundary')
+        if 'positive_depth' in kwargs                :   positive_depth = kwargs.pop('positive_depth')
       
         if (len(kwargs) != 0): raise ValueError('Please provide recognizable keyword arguments!')
         if (survey_type not in ['linear', 'zigzag']): raise ValueError('Please assign the survey_type as "linear" or "zigzag"!')
@@ -102,7 +104,8 @@ class RiverReach(object):
                                                 driver = input_driver,
                                                 use_HD = HD_ob,
                                                 elev_base = elev_base,
-                                                shift = shift
+                                                shift = shift,
+                                                positive_depth=positive_depth
                                             )
             
             if (input_driver is not None):
