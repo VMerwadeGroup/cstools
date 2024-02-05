@@ -1,25 +1,23 @@
 from __future__ import annotations
 
-'''
-    TODO List:
-    1. Add some functions to check if the user provide enough data and information to launch the tools (especially the RasterTools)
-    2. improve raster tools
-    3. improve the calculation by JAX
-'''
 import os
-import numpy as np
 # import jax.numpy as jnp
-from scipy import signal, interpolate
 import pandas as pd
 import geopandas as gpd
-from shapely.geometry import *
 from shapely import speedups
 import warnings
 import pyproj
+import numpy as np
+import pandas as pd
+import geopandas as gpd
+from shapely.geometry import LineString, Polygon, Point
+from scipy import signal
+from scipy import interpolate
+import os
 from . import preprocess
 from . import file_mangement
-import requests
 from requests.exceptions import ConnectionError
+
 
 gpd.options.use_pygeos = False
 
@@ -76,7 +74,7 @@ class RiverReach(object):
         if 'clip_by_boundary' in kwargs              :   clip_by_boundary = kwargs.pop('clip_by_boundary')
         if 'positive_depth' in kwargs                :   positive_depth = kwargs.pop('positive_depth')
       
-        if (len(kwargs) != 0): raise ValueError('Please provide recognizable keyword arguments!')
+        if (len(kwargs) != 0): raise ValueError(f'{kwargs} are not valid keyword arguments!')
         if (survey_type not in ['linear', 'zigzag']): raise ValueError('Please assign the survey_type as "linear" or "zigzag"!')
         
         ## update settings based on the input parameters
@@ -129,7 +127,7 @@ class RiverReach(object):
         self.bd_geom = self.bd_gdf.geometry.iloc[0] if isinstance(self.bd_gdf, gpd.GeoDataFrame) else None
         self.user_crs = pyproj.CRS(map_crsid) if map_crsid else self.bd_gdf.crs
         self.proj_crs = self.user_crs
-        self.checkCRS()
+        self._checkCRS()
 
         ## only process data in the boundary
         if (clip_by_boundary):
@@ -137,7 +135,7 @@ class RiverReach(object):
                 self.ob_gdf = self.ob_gdf[self.ob_gdf.within(self.bd_geom)]
                 self.ob_gdf = self.ob_gdf.reset_index(drop=True)
             else:
-                raise ValueError("The observation or boundary files are not initialized correctly!")
+                raise ValueError("The observation or boundary layers are not initialized correctly!")
 
         if (cross_section_file):
             self.cs_gdf = file_mangement.init_cross_sections(path=cross_section_file)
@@ -148,7 +146,7 @@ class RiverReach(object):
         else:
             cl_geom = preprocess.create_cl_from_bd(self.bd_geom)
             self.cl_gdf = gpd.GeoDataFrame(geometry=[cl_geom], index=[0], crs=self.proj_crs)
-        self.checkCRS()
+        self._checkCRS()
         ## make sure the all CRS are the same and projected; then start processing geometries    
        
         ## ---------- defalut values for parameters ----------
@@ -169,43 +167,57 @@ class RiverReach(object):
             self.coord_converter = preprocess.CoordConverter(self.cl_geom)
             self.cl_xyz = preprocess.get_xy_array_from_line(self.cl_geom)
 
-    def checkCRS(self):
-        if (self.proj_crs is None): raise ValueError(f'''Please assign a projected coordinate system or boudary layer!''')
+    def _checkCRS(self):
+        if (self.proj_crs is None): 
+            raise ValueError("Please assign a projected coordinate system or a boudary layer!")
         self.unit = self.proj_crs.coordinate_system.axis_list[1].unit_name
 
-        ## check the target area is in which NAD 1983 UTM Zone
-        if ((self.unit == 'degree')):
-            centroid = self.bd_geom.centroid
-            crs_zones = [pyproj.CRS.from_user_input(26910+i) for i in range(10)]
-            for crs_zone in crs_zones:
-                extent = crs_zone.area_of_use.bounds
-                if (extent[0] < centroid.x < extent[2]) and (extent[1] < centroid.y < extent[3]):
-                    self.proj_crs = crs_zone
-                    break
+        ## check the target area is in which NAD 1983 UTM Zone in CONUS, if no projected CRS is provided
+        ## The default CRS is NAD 1983 UTM Zone 10N to 19N in meters
+        if (self.unit == 'degree'):
+            self.proj_crs = self.bd_gdf.estimate_utm_crs()
+            self.unit = self.proj_crs.coordinate_system.axis_list[1].unit_name
             
-        if (self.cl_gdf is not None):
-            self.cl_gdf.to_crs(self.proj_crs, inplace=True)
-            self.cl_geom = self.cl_gdf.loc[0, 'geometry']
+        ## update the CRS in every layer and geometry to make them consistent
         if (self.ob_gdf is not None): self.ob_gdf.to_crs(self.proj_crs, inplace=True)
         if (self.cs_gdf is not None): self.cs_gdf.to_crs(self.proj_crs, inplace=True)
         if (self.ms_gdf is not None): self.ms_gdf.to_crs(self.proj_crs, inplace=True)
+        if (self.cl_gdf is not None):
+            self.cl_gdf.to_crs(self.proj_crs, inplace=True)
+            self.cl_geom = self.cl_gdf.loc[0, 'geometry']
         if (self.bd_gdf is not None): 
             self.bd_gdf.to_crs(self.proj_crs, inplace=True)
             self.bd_geom = self.bd_gdf.loc[0, 'geometry']
 
-    def convert_sn_coord_for_layer(self, input = None, output_shp = None, output_csv = None, fields = None):
-        '''
-        Transfrom layer to S-N coordinates
-        Input:
-            input: path of file that can be read by geopandas or GeoDataFrame
-            output_file: the path to store the shapefile
-            output_csv: the path to export attributes as .csv or not
-            fields: the fields will be copied from the original layer
-        Output:
-            save the shape file with S-N in attributes table
-            save the .csv file (if output_csv exists)
-        '''
-        #print('Transforming to S-N coordinate...')
+    def convert_sn_coord_for_layer(self, 
+                                   input: str|gpd.GeoDataFrame|None = None, 
+                                   output_shp: str|None = None, 
+                                   output_csv: str|None = None
+                                   ) -> gpd.GeoDataFrame:
+        """Convert the point coordinates from Cartiesian system to the curvilier system.
+        The coordinates are converted based on the centerline of this object.
+
+        Parameters
+        ----------
+        input : str | gpd.GeoDataFrame | None, optional
+            The input file of the observation points. 
+            By default None, the ob_gdf in this object will be used.
+            It can also be an existed GeoDataFrame, or a path of an importable file for geopandas.
+        output_shp : str | None, optional
+            The path of a output georeferenced file, by default None
+        output_csv : str | None, optional
+            The path of a output csv file, by default None
+
+        Returns
+        -------
+        gpd.GeoDataFrame
+            A GoeDataFrame including x, y, z, S, N in its attribute table.
+
+        Raises
+        ------
+        IOError
+            Input in invalid.
+        """
         
         if (input is None):
             gdf = self.ob_gdf
@@ -230,15 +242,6 @@ class RiverReach(object):
         gdf['z'] = z
         gdf['S'] = s
         gdf['N'] = n
-
-        # xyz_array = preprocess.get_xyz_array(gdf['geometry'])
-        # sn_array = preprocess.convert_xy2sn(xyz_array[:, :2], self.cl_xyz, self.bw_org)
-        
-        # gdf['x'] = xyz_array[:, 0]
-        # gdf['y'] = xyz_array[:, 1]
-        # gdf['z'] = xyz_array[:, 2]
-        # gdf['S'] = sn_array[:, 0]
-        # gdf['N'] = sn_array[:, 1]
 
         df = pd.DataFrame(gdf.drop(columns=['geometry']))
         if output_shp:

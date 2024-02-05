@@ -6,7 +6,6 @@ from .locate_cs import *
 from . import curvilinear_interp
 from . import file_mangement
 
-
 class CrossSectionTools(object):
     """
     There four different methods for users.

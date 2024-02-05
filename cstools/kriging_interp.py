@@ -90,6 +90,7 @@ class AnisotropicKriging(object):
 
         s_spacing_re = s_spacing * anisotropy_r
         s_re = np.arange(df['S_re'].min(), df['S_re'].max()+s_spacing_re, s_spacing_re)
+        
         n = np.arange(df['N'].min(), df['N'].max()+n_spacing, n_spacing)
 
         ss, nn = np.meshgrid(s_re, n)
