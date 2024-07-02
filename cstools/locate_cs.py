@@ -120,7 +120,9 @@ def project_zigzag_survey(row, num):
     ## make sure there is at least one value in a cross-section line
     if cnt_z_nan != num:
         line = LineString(new_points)
-    row['geometry'] = line
+        row['geometry'] = line
+    else:
+        row['geometry'] = np.nan
     return row
 
 def project_points_cs(reach: RiverReach,
@@ -148,6 +150,7 @@ def project_points_cs(reach: RiverReach,
     elif reach.survey_type == 'zigzag':
         num = num if num else reach.vertices_in_xs
         cs_gdf = cs_gdf.apply(project_zigzag_survey, args=(num,), axis=1)
+    cs_gdf = cs_gdf[~cs_gdf['geometry'].isnull()]
     cs_gdf = cs_gdf.drop(columns='clip_obs')
 
     reach.cs_gdf= cs_gdf

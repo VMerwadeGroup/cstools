@@ -139,7 +139,13 @@ class CrossSectionTools(object):
         self.reach.cl_gdf.to_crs(self.reach.proj_crs, inplace=True)
         self.reach.bd_gdf.to_crs(self.reach.proj_crs, inplace=True)
         
-        self.ob_gdf = self.reach.convert_sn_coord_for_layer()
+        ## skip ths convertion if the ob_gdf has S and N columns
+        columns = self.reach.ob_gdf.columns
+        if ('S' not in columns) or ('N' not in columns):
+            self.ob_gdf = self.reach.convert_sn_coord_for_layer()
+        else:
+            self.ob_gdf = self.reach.ob_gdf
+
         locate_cs_by_hist(self.reach, bins, num_vertices, positions, bw, extend_to_boundary, dist_threshold=dist_threshold, width_threshold=width_threshold, XS_file=XS_file, masks_file=masks_file)
         xs_df = get_cs_df_from_gdf(self.reach)
         self.update_cs_gdf(xs_df, XS_file)
