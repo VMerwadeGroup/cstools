@@ -10,4 +10,7 @@ package-lock.json
 .vscode
 developing
 .pytest_cache
-*/__pycache__
+./*/__pycache__
+./*/*/__pycache__
+/build
+/*.egg-info

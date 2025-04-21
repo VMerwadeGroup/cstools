@@ -4,9 +4,7 @@ import os
 import urllib
 import zipfile
 import requests
-from glob import glob
 import geopandas as gpd
-import fiona
 from shapely.geometry import LineString
 from ..preprocess.basic_features import *
 
