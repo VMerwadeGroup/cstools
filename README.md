@@ -5,14 +5,10 @@ cstools is a Python package that provides functionality for creating curvilinear
 
 ## Installation
 
-You can install cstools using ``pip``:
+Download this repository and install this package locally.
+You can install cstools using ``pip`` in the directory that contains the `pyproject.toml` file:
 
-    $ pip install cstools
-
-or using ``conda`` (``mamba``):
-
-    $ conda install -c conda-forge cstools
-
+    $ pip install .
 
 ## Quick start
 
